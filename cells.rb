@@ -59,8 +59,7 @@ class Object
 
 	def calculate(ivar, &block)
 		$cells_read_protocoll = []
-		initval = block.call
-		instance_variable_set(("@" + ivar.to_s).to_sym, initval)
+		send((ivar.to_s + "=").to_sym, block.call)
 		target_obj = self
 		$cells_read_protocoll.each do |obj, readvar|
 			obj.instance_eval do
