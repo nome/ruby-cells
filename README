@@ -1,0 +1,47 @@
+ruby-cells: Declarative relations between object properties.
+============================================================
+
+ruby-cells was inspired by the Cells extension to the Common Lisp Object System
+(CLOS), which in turn was inspired by spreadsheet applications. See
+http://common-lisp.net/project/cells/
+
+Basically, by loading the cells.rb library, you can define special attributes
+called cells (shamelessly ripping the standard Cells example ;-):
+
+class Motor
+	cell :status
+end
+
+Like attr_accessors, this will define getter and setter methods for @status.
+Hower, these accessor methods differ from the standard ones in that they allow
+you to establish dynamic relationships between cells:
+
+class Motor
+	cell :temperature
+	def initialize
+		self.temperature = 0
+		calculate :status do
+			if self.temperature < 100
+				:on
+			else
+				:off
+			end
+		end
+	end
+end
+
+That is, when creating a new Motor instance, the block associated with calculate
+is run and @status is assigned the value :on (since temperature was previously
+initialized to 0). Nothing fancy so far. However, whenever the value of
+temperature is changed (assuming its setter method is used), the block will
+be automatically re-run and @status will be updated accordingly.
+
+Also, you can register custom observers for changes to particular cells:
+
+motor = Motor.new
+motor.observe :status do |old, new|
+	puts "Motor is now #{new}."
+end
+
+A slightly more sophisticated example is provided in motor-control.rb.
+
