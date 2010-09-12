@@ -18,9 +18,9 @@ class View < Qt::Widget
 
 		self.window_title = 'Testing ruby-cells with a model/view application'
 		resize(500,100)
-		addAction(Qt::Action.new(self) do
+		add_action(Qt::Action.new(self) do
 			self.shortcuts = Qt::KeySequence.Quit
-			connect(SIGNAL "triggered(bool)") { Qt::Application.instance.quit }
+			connect(SIGNAL :triggered) { Qt::Application.instance.quit }
 		end)
 
 		input = Qt::LineEdit.new(model.content) do

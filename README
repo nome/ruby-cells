@@ -1,4 +1,4 @@
-ruby-cells: Declarative relations between object properties.
+ruby-cells: Declarative relations between object attributes.
 ============================================================
 
 ruby-cells was inspired by the Cells extension to the Common Lisp Object System
@@ -44,4 +44,7 @@ motor.observe :status do |old, new|
 end
 
 A slightly more sophisticated example is provided in motor-control.rb.
+
+For an idea of how to apply this to model/view design (in the context of Qt),
+see model-view.rb.
 
