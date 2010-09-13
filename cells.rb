@@ -22,7 +22,7 @@
 
 $cells_read_protocoll = nil
 
-class Class
+class Module
 	# Define one or more cells for the target class.
 	# This is similar in spirit to attr_accesssor, except that the accessor
 	# methods defined contain some
