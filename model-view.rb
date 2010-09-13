@@ -5,9 +5,10 @@ require 'Qt4'
 # A simple model class.
 # Imagine some interesting domain logic here.
 class Model
-	cell :content
+	cell :name, :email
 	def initialize
-		self.content = "Hello World."
+		self.name = "Your Name"
+		self.email = "user@example.com"
 	end
 end
 
@@ -23,16 +24,20 @@ class View < Qt::Widget
 			connect(SIGNAL :triggered) { Qt::Application.instance.quit }
 		end)
 
-		input = Qt::LineEdit.new(model.content) do
-			connect(SIGNAL "textChanged(QString)") { model.content = text }
+		input_name = Qt::LineEdit.new(model.name) do
+			connect(SIGNAL "textChanged(QString)") { model.name = text }
+		end
+		input_email = Qt::LineEdit.new(model.email) do
+			connect(SIGNAL "textChanged(QString)") { model.email = text }
 		end
 		output = Qt::Label.new do
 			# This is the interesting bit:
-			calculate(:text) { "+++" + model.content + "+++" }
+			calculate(:text) { "From: #{model.name} <#{model.email}>" }
 		end
 
 		self.layout = Qt::VBoxLayout.new do
-			add_widget input
+			add_widget input_name
+			add_widget input_email
 			add_widget output
 		end
 	end
