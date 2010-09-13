@@ -44,14 +44,8 @@ end
 
 testm = Motor.new(50)
 
-testm.observe :status do |new, old|
-	puts "Motor status changing from #{old} to #{new}."
-end
-testm.observe :fuel_pump do |new, old|
-	puts "Fuel Pump changing from #{old} to #{new}."
-end
-testm.observe :temperature do |new, old|
-	puts "Motor temperature changing from #{old} to #{new}."
+testm.observe [:status, :fuel_pump, :temperature] do |new, old, obj, cell|
+	puts "#{cell} changing from #{old} to #{new}."
 end
 testm.observe :temperature, 100..1000 do
 	puts "BOILING!"

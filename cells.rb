@@ -78,13 +78,21 @@ class Module
 end
 
 class Object
-	# Register observer &block to be called when cell changes.
+	# Register observer &block to be called when one or more cells changes.
+	# cell_spec may be the name of a single cell or a sequence of cells.
 	# If pattern is given, a new cell value is matched against it (using ===) and
 	# only if the match succeeds &block will get called.
-	def observe(cell, pattern=Object, &block)
+	def observe(cell_spec, pattern=Object, &block)
 		@cells_observers ||= Hash.new
-		@cells_observers[cell] ||= []
-		@cells_observers[cell].push [pattern, block]
+		if cell_spec.respond_to? :each
+			cell_spec.each do |cell|
+				@cells_observers[cell] ||= []
+				@cells_observers[cell].push [pattern, block]
+			end
+		else
+			@cells_observers[cell_spec] ||= []
+			@cells_observers[cell_spec].push [pattern, block]
+		end
 	end
 
 	# associate attribute dynamically with the formula given by &block
