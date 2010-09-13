@@ -44,7 +44,11 @@ class Module
 				# collect observers of this cell
 				observers = []
 				begin
-					observers += instance_variable_get(:@cells_observers)[name]
+					instance_variable_get(:@cells_observers)[name].each do |pattern, block|
+						if pattern === new_value
+							observers.push block
+						end
+					end
 				rescue NoMethodError, TypeError
 				end
 				# make sure external observers are always called before updating
@@ -74,11 +78,13 @@ class Module
 end
 
 class Object
-	# register observer &block to be called when cell changes
-	def observe(cell, &block)
+	# Register observer &block to be called when cell changes.
+	# If pattern is given, a new cell value is matched against it (using ===) and
+	# only if the match succeeds &block will get called.
+	def observe(cell, pattern=Object, &block)
 		@cells_observers ||= Hash.new
 		@cells_observers[cell] ||= []
-		@cells_observers[cell].push block
+		@cells_observers[cell].push [pattern, block]
 	end
 
 	# associate attribute dynamically with the formula given by &block

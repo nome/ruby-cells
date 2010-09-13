@@ -53,6 +53,9 @@ end
 testm.observe :temperature do |old, new|
 	puts "Motor temperature changing from #{old} to #{new}."
 end
+testm.observe :temperature, 100..1000 do |old, new|
+	puts "BOILING!"
+end
 
 tires = 4.times do |i|
 	Tire.new(testm).observe :turning do |old, new|
