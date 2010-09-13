@@ -60,7 +60,7 @@ class Module
 
 				# notify observers
 				observers.each do |block|
-					block.call(old_value, new_value)
+					block.call(new_value, old_value, self, name.to_sym)
 				end
 			end
 

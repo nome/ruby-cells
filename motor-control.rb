@@ -44,21 +44,21 @@ end
 
 testm = Motor.new(50)
 
-testm.observe :status do |old, new|
+testm.observe :status do |new, old|
 	puts "Motor status changing from #{old} to #{new}."
 end
-testm.observe :fuel_pump do |old, new|
+testm.observe :fuel_pump do |new, old|
 	puts "Fuel Pump changing from #{old} to #{new}."
 end
-testm.observe :temperature do |old, new|
+testm.observe :temperature do |new, old|
 	puts "Motor temperature changing from #{old} to #{new}."
 end
-testm.observe :temperature, 100..1000 do |old, new|
+testm.observe :temperature, 100..1000 do
 	puts "BOILING!"
 end
 
 tires = 4.times do |i|
-	Tire.new(testm).observe :turning do |old, new|
+	Tire.new(testm).observe :turning do |new|
 		puts "Tire #{i} turning: #{new}"
 	end
 end
