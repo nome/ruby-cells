@@ -44,9 +44,9 @@ end
 
 testm = Motor.new(50)
 
-testm.observe [:status, :fuel_pump, :temperature] do |new, old, obj, cell|
+testm.observe [:status, :fuel_pump, :temperature], &(observer = lambda do |new, old, obj, cell|
 	puts "#{cell} changing from #{old} to #{new}."
-end
+end)
 testm.observe :temperature, 100..1000 do
 	puts "BOILING!"
 end
@@ -60,4 +60,6 @@ end
 testm.temperature = 80
 testm.temperature = 110
 testm.temperature = 90
+testm.unobserve(observer, :temperature)
+testm.temperature = 120
 

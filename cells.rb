@@ -95,6 +95,22 @@ class Object
 		end
 	end
 
+	# De-register an observer block.
+	# observer must be equal to the block to be de-registered.
+	# If cell_spec or pattern are given and non-nil, they limit the registrations
+	# being canceled to the specified cell(s) or pattern.
+	def unobserve(observer, cell_spec=nil, pattern=nil)
+		return if @cells_observers.nil?
+		cells = if cell_spec.respond_to? :to_a
+					  cell_spec.to_a
+				  else
+					  [cell_spec]
+				  end
+		@cells_observers.select{ |cell,obervers| cells.include? cell}.each do |cell, observers|
+			observers.delete_if{ |pat,block| (pattern.nil? or pattern == pat) and block == observer }
+		end
+	end
+
 	# associate attribute dynamically with the formula given by &block
 	# i.e. whenever the cells read by &block change, the attribute will be
 	# updated
