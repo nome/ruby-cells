@@ -33,18 +33,18 @@ class Module
 
 			# define setter
 			define_method((name.to_s + "=").to_sym) do |new_value|
-				# avoid notifying observers of non-updates
-				if instance_variable_get(iname) == new_value
-					return
-				end
-
 				old_value = instance_variable_get(iname)
 				instance_variable_set(iname, new_value)
+
+				# avoid notifying observers of non-updates
+				if old_value == new_value
+					return
+				end
 
 				# collect observers of this cell
 				observers = []
 				begin
-					instance_variable_get(:@cells_observers)[name].each do |pattern, block|
+					@cells_observers[name].each do |pattern, block|
 						if pattern === new_value
 							observers.push block
 						end
@@ -54,7 +54,7 @@ class Module
 				# make sure external observers are always called before updating
 				# other cells
 				begin
-					observers += instance_variable_get(:@cells_internal_observers)[name]
+					observers += @cells_internal_observers[name]
 				rescue NoMethodError, TypeError
 				end
 
