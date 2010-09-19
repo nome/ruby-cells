@@ -20,6 +20,8 @@
 # IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+require 'set'
+
 $cells_read_protocoll = nil
 
 class Module
@@ -54,9 +56,11 @@ class Module
 
 				# update other cells
 				begin
-				   @cells_internal_observers[name].each do |target, setter, block|
-				   	target.send(setter, block.call)
-				   end
+					@cells_internal_observers[name].each do |target, attribute, block|
+						# maybe the change in this cell triggers new dependencies due to a branch on its
+						# value; so we call calculate again to update dependencies
+						target.calculate(attribute, &block)
+					end
 				rescue NoMethodError, TypeError
 				end
 			end
@@ -112,24 +116,25 @@ class Object
 	# i.e. whenever the cells read by &block change, the attribute will be
 	# updated
 	def calculate(attribute, &block)
-		setter = (attribute.to_s + "=").to_sym
-
 		# initialize attribute and determine source cells
 		$cells_read_protocoll = []
-		send(setter, block.call)
+		result = block.call
 
 		# register observer for all source cells
 		target_obj = self
 		$cells_read_protocoll.each do |obj, readvar|
 			obj.instance_eval do
 				@cells_internal_observers ||= Hash.new
-				@cells_internal_observers[readvar] ||= []
-				@cells_internal_observers[readvar].push([target_obj, setter, block])
+				@cells_internal_observers[readvar] ||= Set.new
+				@cells_internal_observers[readvar].add([target_obj, attribute, block])
 			end
 		end
 
 		# reset source cell protocoll
 		$cells_read_protocoll = nil
+
+		# finally, update the target attribute
+		send((attribute.to_s + "=").to_sym, result)
 	end
 end
 
