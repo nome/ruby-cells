@@ -41,26 +41,23 @@ class Module
 					return
 				end
 
-				# collect observers of this cell
-				observers = []
+				# make sure external observers are always called before updating
+				# other cells
 				begin
 					@cells_observers[name].each do |pattern, block|
 						if pattern === new_value
-							observers.push block
+							block.call(new_value, old_value, self, name.to_sym)
 						end
 					end
 				rescue NoMethodError, TypeError
 				end
-				# make sure external observers are always called before updating
-				# other cells
-				begin
-					observers += @cells_internal_observers[name]
-				rescue NoMethodError, TypeError
-				end
 
-				# notify observers
-				observers.each do |block|
-					block.call(new_value, old_value, self, name.to_sym)
+				# update other cells
+				begin
+				   @cells_internal_observers[name].each do |target, setter, block|
+				   	target.send(setter, block.call)
+				   end
+				rescue NoMethodError, TypeError
 				end
 			end
 
@@ -127,9 +124,7 @@ class Object
 			obj.instance_eval do
 				@cells_internal_observers ||= Hash.new
 				@cells_internal_observers[readvar] ||= []
-				@cells_internal_observers[readvar].push(proc do
-					target_obj.send(setter, block.call)
-				end)
+				@cells_internal_observers[readvar].push([target_obj, setter, block])
 			end
 		end
 
