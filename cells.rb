@@ -84,12 +84,12 @@ class Module
 
 				# update other cells
 				begin
-					@cells_internal_observers[name].keep_if { |target, attribute, block| target.weakref_alive? }
-					@cells_internal_observers[name].each do |target, attribute, block|
+					@cells_internal_observers[name].select! { |target, args, block| target.weakref_alive? }
+					@cells_internal_observers[name].each do |target, args, block|
 						begin
 							# maybe the change in this cell triggers new dependencies due to a branch on its
 							# value; so we call calculate again to update dependencies
-							target.calculate(attribute, &block)
+							target.calculate(*args, &block)
 						rescue WeakRef::RefError
 							# see @cells_observers case above
 						end
@@ -103,10 +103,63 @@ class Module
 				# needed by Object#calculate to figure out which cells a formula
 				# depends on
 				if $cells_read_protocoll
-					$cells_read_protocoll.push [self, name]
+					$cells_read_protocoll.push [self, name.to_sym]
 				end
 				instance_variable_get(iname)
 			end
+		end
+	end
+
+	# Make slicing operators behave as if each index denoted a cell
+	def cell_slicing
+		alias_method :cells_slice_assign, :[]=
+		alias_method :cells_slice, :[]
+		private :cells_slice_assign, :cells_slice
+
+		define_method(:[]=) do |*args|
+			index = args[0..-2]
+			old_value = cells_slice(*index)
+			cells_slice_assign(*args)
+			new_value = cells_slice(*index)
+
+			# avoid notifying observers of non-updates
+			if old_value == new_value
+				return
+			end
+
+			begin
+				@cells_observers[:[]].select!{|pattern, block| block.weakref_alive?}
+				@cells_observers[:[]].each do |pattern, block|
+					if pattern === new_value
+						begin
+							block.call(new_value, old_value, self, index)
+						rescue WeakRef::RefError
+						end
+					end
+				end
+			rescue NoMethodError, TypeError
+			end
+
+			begin
+				@cells_internal_observers[:[]].select!{ |target, args, block| target.weakref_alive? }
+				@cells_internal_observers[:[]].each do |target, args, block|
+					begin
+						target.calculate(*args, &block)
+					rescue WeakRef::RefError
+					end
+				end
+			rescue NoMethodError, TypeError
+			end
+		end
+
+		#define getter
+		define_method(:[]) do |*args|
+			# needed by Object#calculate to figure out which cells a formula
+			# depends on
+			if $cells_read_protocoll
+				$cells_read_protocoll.push([self, :[]])
+			end
+			cells_slice(*args)
 		end
 	end
 end
@@ -121,7 +174,7 @@ class Object
 	# cell_spec may be the name of a single cell or a sequence of cells.
 	# If pattern is given, a new cell value is matched against it (using ===) and
 	# only if the match succeeds &block will get called.
-	def observe(cell_spec, pattern=Object, &block)
+	def observe(cell_spec=:[], pattern=Object, &block)
 		@cells_observers ||= Hash.new
 		if cell_spec.respond_to? :each
 			cell_spec.each do |cell|
@@ -154,7 +207,7 @@ class Object
 	# associate attribute dynamically with the formula given by &block
 	# i.e. whenever the cells read by &block change, the attribute will be
 	# updated
-	def calculate(attribute, &block)
+	def calculate(*args, &block)
 		# initialize attribute and determine source cells
 		$cells_read_protocoll = []
 		result = block.call
@@ -165,7 +218,7 @@ class Object
 			obj.instance_eval do
 				@cells_internal_observers ||= Hash.new
 				@cells_internal_observers[readvar] ||= Set.new
-				@cells_internal_observers[readvar].add([WeakRef.new(target_obj), attribute, block])
+				@cells_internal_observers[readvar].add([WeakRef.new(target_obj), args, block])
 			end
 		end
 
@@ -173,7 +226,11 @@ class Object
 		$cells_read_protocoll = nil
 
 		# finally, update the target attribute
-		send((attribute.to_s + "=").to_sym, result)
+		if args[0] == :[]
+			self[*args[1..-1]] = result
+		else
+			send((args[0].to_s + "=").to_sym, result)
+		end
 	end
 end
 
