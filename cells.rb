@@ -21,6 +21,26 @@
 # THE SOFTWARE.
 
 require 'set'
+require 'weakref'
+
+class WeakRef
+	# Make WeakRef play nicely with Set; i.e. compare by target object
+	# (hash already works as expected due to being delegated).
+	# Without this, we'd have
+	#		WeakRef.new([]).eql? WeakRef.new([]) # => false
+	# which means two weak references to eql? objects are not eql?; nor are are
+	# most objects to a WeakRef.new(obj). Nevertheless, a weak reference is eql?
+	# to its target. This leads to the confusing situation that Set semantics
+	# depends on implementation details such as which way argound two entries are
+	# compared.
+	def eql?(other)
+		if other.is_a? WeakRef
+			__getobj__.eql? other.__getobj__
+		else
+			__getobj__.eql? other
+		end
+	end
+end
 
 $cells_read_protocoll = nil
 
@@ -46,9 +66,17 @@ class Module
 				# make sure external observers are always called before updating
 				# other cells
 				begin
+					@cells_observers[name].select!{|pattern, block| block.weakref_alive?}
 					@cells_observers[name].each do |pattern, block|
 						if pattern === new_value
-							block.call(new_value, old_value, self, name.to_sym)
+							begin
+								block.call(new_value, old_value, self, name.to_sym)
+							rescue WeakRef::RefError
+								# oops, that was close. block got garbage collected
+								# between us cleaning the observer list and trying to
+								# call this block. ignore for now; we'll remove it next
+								# time around.
+							end
 						end
 					end
 				rescue NoMethodError, TypeError
@@ -56,10 +84,15 @@ class Module
 
 				# update other cells
 				begin
+					@cells_internal_observers[name].keep_if { |target, attribute, block| target.weakref_alive? }
 					@cells_internal_observers[name].each do |target, attribute, block|
-						# maybe the change in this cell triggers new dependencies due to a branch on its
-						# value; so we call calculate again to update dependencies
-						target.calculate(attribute, &block)
+						begin
+							# maybe the change in this cell triggers new dependencies due to a branch on its
+							# value; so we call calculate again to update dependencies
+							target.calculate(attribute, &block)
+						rescue WeakRef::RefError
+							# see @cells_observers case above
+						end
 					end
 				rescue NoMethodError, TypeError
 				end
@@ -80,6 +113,11 @@ end
 
 class Object
 	# Register observer &block to be called when one or more cells changes.
+	# Return block; the caller is supposed to keep a reference to the block as long
+	# as it's supposed to be executed. Simply registering a block as an observer
+	# won't keep it from being garbage collected (it's stored as a WeakRef); and
+	# either the block being garbage collected or explicitly de-registered using
+	# Object#unobserve will stop the observer from receiving further events.
 	# cell_spec may be the name of a single cell or a sequence of cells.
 	# If pattern is given, a new cell value is matched against it (using ===) and
 	# only if the match succeeds &block will get called.
@@ -88,12 +126,13 @@ class Object
 		if cell_spec.respond_to? :each
 			cell_spec.each do |cell|
 				@cells_observers[cell] ||= []
-				@cells_observers[cell].push [pattern, block]
+				@cells_observers[cell].push [pattern, WeakRef.new(block)]
 			end
 		else
 			@cells_observers[cell_spec] ||= []
-			@cells_observers[cell_spec].push [pattern, block]
+			@cells_observers[cell_spec].push [pattern, WeakRef.new(block)]
 		end
+		block
 	end
 
 	# De-register an observer block.
@@ -126,7 +165,7 @@ class Object
 			obj.instance_eval do
 				@cells_internal_observers ||= Hash.new
 				@cells_internal_observers[readvar] ||= Set.new
-				@cells_internal_observers[readvar].add([target_obj, attribute, block])
+				@cells_internal_observers[readvar].add([WeakRef.new(target_obj), attribute, block])
 			end
 		end
 

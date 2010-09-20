@@ -44,14 +44,14 @@ end
 
 testm = Motor.new(50)
 
-testm.observe [:status, :fuel_pump, :temperature], &(observer = lambda do |new, old, obj, cell|
+observer = testm.observe [:status, :fuel_pump, :temperature] do |new, old, obj, cell|
 	puts "#{cell} changing from #{old} to #{new}."
-end)
-testm.observe :temperature, 100..1000 do
+end
+observer2 = testm.observe :temperature, 100..1000 do
 	puts "BOILING!"
 end
 
-tires = 4.times do |i|
+tires = (1..4).map do |i|
 	Tire.new(testm).observe :turning do |new|
 		puts "Tire #{i} turning: #{new}"
 	end
@@ -59,7 +59,10 @@ end
 
 testm.temperature = 80
 testm.temperature = 110
+puts "Testing whether all observers survive garbage collection..."
+ObjectSpace.garbage_collect
 testm.temperature = 90
+puts "Un-observing :temperature..."
 testm.unobserve(observer, :temperature)
 testm.temperature = 120
 
