@@ -20,27 +20,7 @@
 # IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-require 'set'
 require 'weakref'
-
-class WeakRef
-	# Make WeakRef play nicely with Set; i.e. compare by target object
-	# (hash already works as expected due to being delegated).
-	# Without this, we'd have
-	#		WeakRef.new([]).eql? WeakRef.new([]) # => false
-	# which means two weak references to eql? objects are not eql?; nor are are
-	# most objects to a WeakRef.new(obj). Nevertheless, a weak reference is eql?
-	# to its target. This leads to the confusing situation that Set semantics
-	# depends on implementation details such as which way argound two entries are
-	# compared.
-	def eql?(other)
-		if other.is_a? WeakRef
-			__getobj__.eql? other.__getobj__
-		else
-			__getobj__.eql? other
-		end
-	end
-end
 
 $cells_read_protocoll = nil
 
@@ -84,12 +64,12 @@ class Module
 
 				# update other cells
 				begin
-					@cells_internal_observers[name].select! { |target, args, block| target.weakref_alive? }
-					@cells_internal_observers[name].each do |target, args, block|
+					@cells_internal_observers[name].select! { |argsblock, target| target.weakref_alive? }
+					@cells_internal_observers[name].each do |argsblock, target|
 						begin
 							# maybe the change in this cell triggers new dependencies due to a branch on its
 							# value; so we call calculate again to update dependencies
-							target.calculate(*args, &block)
+							target.calculate(*argsblock[0], &argsblock[1])
 						rescue WeakRef::RefError
 							# see @cells_observers case above
 						end
@@ -141,10 +121,10 @@ class Module
 			end
 
 			begin
-				@cells_internal_observers[:[]].select!{ |target, args, block| target.weakref_alive? }
-				@cells_internal_observers[:[]].each do |target, args, block|
+				@cells_internal_observers[:[]].select!{ |argsblock, target| target.weakref_alive? }
+				@cells_internal_observers[:[]].each do |argsblock, target|
 					begin
-						target.calculate(*args, &block)
+						target.calculate(*argsblock[0], &argsblock[1])
 					rescue WeakRef::RefError
 					end
 				end
@@ -217,8 +197,8 @@ class Object
 		$cells_read_protocoll.each do |obj, readvar|
 			obj.instance_eval do
 				@cells_internal_observers ||= Hash.new
-				@cells_internal_observers[readvar] ||= Set.new
-				@cells_internal_observers[readvar].add([WeakRef.new(target_obj), args, block])
+				@cells_internal_observers[readvar] ||= Hash.new
+				@cells_internal_observers[readvar][[args,block]] = WeakRef.new(target_obj)
 			end
 		end
 
