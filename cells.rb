@@ -174,7 +174,9 @@ class Object
 	# being canceled to the specified cell(s) or pattern.
 	def unobserve(observer, cell_spec=nil, pattern=nil)
 		return if @cells_observers.nil?
-		cells = if cell_spec.respond_to? :to_a
+		cells = if cell_spec.nil?
+					  @cells_observers.map { |cell,observes| cell }
+				  elsif cell_spec.respond_to? :to_a
 					  cell_spec.to_a
 				  else
 					  [cell_spec]
