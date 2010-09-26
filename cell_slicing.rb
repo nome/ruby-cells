@@ -2,6 +2,7 @@ $:.unshift '.'
 require 'cells'
 
 class Array
+	include Cells
 	cell_slicing
 	cell :value
 end

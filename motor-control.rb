@@ -8,6 +8,7 @@ $:.unshift '.'
 require 'cells'
 
 class Motor
+	include Cells
 	cell :status, :fuel_pump, :temperature
 
 	def initialize(temperature)
@@ -30,6 +31,7 @@ class Motor
 end
 
 class Tire
+	include Cells
 	cell :turning
 	def initialize(motor)
 		calculate :turning do

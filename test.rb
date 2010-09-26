@@ -4,6 +4,7 @@ $:.unshift '.'
 require 'cells'
 
 class TestDummy
+	include Cells
 	cell :cell1, :cell2, :cell3, :cell4
 end
 
@@ -174,6 +175,7 @@ class CellsTests < Test::Unit::TestCase
 	def test_slicing
 		ary = [1,2,3]
 		class << ary
+			include Cells
 			cell_slicing
 		end
 

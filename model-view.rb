@@ -2,6 +2,10 @@ $:.unshift '.'
 require 'cells'
 require 'Qt4'
 
+class Object
+	include Cells
+end
+
 # A simple model class.
 # Imagine some interesting domain logic here.
 class Model

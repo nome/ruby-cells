@@ -24,127 +24,132 @@ require 'weakref'
 
 $cells_read_protocoll = nil
 
-class Module
-	# Define one or more cells for the target class.
-	# This is similar in spirit to attr_accesssor, except that the accessor
-	# methods defined contain some
-	def cell(*names)
-		names.each do |name|
-			# the instance variable name as a symbol
-			iname = ("@" + name.to_s).to_sym
+module Cells
+	def self.included(base)
+		base.extend(ClassMethods)
+	end
 
-			# define setter
-			define_method((name.to_s + "=").to_sym) do |new_value|
-				old_value = instance_variable_get(iname)
-				instance_variable_set(iname, new_value)
-
+	module ClassMethods
+		# Define one or more cells for the target class.
+		# This is similar in spirit to attr_accesssor, except that the accessor
+		# methods defined contain some
+		def cell(*names)
+			names.each do |name|
+				# the instance variable name as a symbol
+				iname = ("@" + name.to_s).to_sym
+	
+				# define setter
+				define_method((name.to_s + "=").to_sym) do |new_value|
+					old_value = instance_variable_get(iname)
+					instance_variable_set(iname, new_value)
+	
+					# avoid notifying observers of non-updates
+					if old_value == new_value
+						return
+					end
+	
+					# make sure external observers are always called before updating
+					# other cells
+					begin
+						@cells_observers[name].select!{|pattern, block| block.weakref_alive?}
+						@cells_observers[name].each do |pattern, block|
+							if pattern === new_value
+								begin
+									block.call(new_value, old_value, self, name.to_sym)
+								rescue WeakRef::RefError
+									# oops, that was close. block got garbage collected
+									# between us cleaning the observer list and trying to
+									# call this block. ignore for now; we'll remove it next
+									# time around.
+								end
+							end
+						end
+					rescue NoMethodError, TypeError
+					end
+	
+					# update other cells
+					begin
+						@cells_internal_observers[name].select! { |argsblock, target| target.weakref_alive? }
+						@cells_internal_observers[name].each do |argsblock, target|
+							begin
+								# maybe the change in this cell triggers new dependencies due to a branch on its
+								# value; so we call calculate again to update dependencies
+								target.calculate(*argsblock[0], &argsblock[1])
+							rescue WeakRef::RefError
+								# see @cells_observers case above
+							end
+						end
+					rescue NoMethodError, TypeError
+					end
+				end
+	
+				#define getter
+				define_method(name.to_sym) do
+					# needed by Object#calculate to figure out which cells a formula
+					# depends on
+					if $cells_read_protocoll
+						$cells_read_protocoll.push [self, name.to_sym]
+					end
+					instance_variable_get(iname)
+				end
+			end
+		end
+	
+		# Make slicing operators behave as if each index denoted a cell
+		def cell_slicing
+			alias_method :cells_slice_assign, :[]=
+			alias_method :cells_slice, :[]
+			private :cells_slice_assign, :cells_slice
+	
+			define_method(:[]=) do |*args|
+				index = args[0..-2]
+				old_value = cells_slice(*index)
+				cells_slice_assign(*args)
+				new_value = cells_slice(*index)
+	
 				# avoid notifying observers of non-updates
 				if old_value == new_value
 					return
 				end
-
-				# make sure external observers are always called before updating
-				# other cells
+	
 				begin
-					@cells_observers[name].select!{|pattern, block| block.weakref_alive?}
-					@cells_observers[name].each do |pattern, block|
+					@cells_observers[:[]].select!{|pattern, block| block.weakref_alive?}
+					@cells_observers[:[]].each do |pattern, block|
 						if pattern === new_value
 							begin
-								block.call(new_value, old_value, self, name.to_sym)
+								block.call(new_value, old_value, self, index)
 							rescue WeakRef::RefError
-								# oops, that was close. block got garbage collected
-								# between us cleaning the observer list and trying to
-								# call this block. ignore for now; we'll remove it next
-								# time around.
 							end
 						end
 					end
 				rescue NoMethodError, TypeError
 				end
-
-				# update other cells
+	
 				begin
-					@cells_internal_observers[name].select! { |argsblock, target| target.weakref_alive? }
-					@cells_internal_observers[name].each do |argsblock, target|
+					@cells_internal_observers[:[]].select!{ |argsblock, target| target.weakref_alive? }
+					@cells_internal_observers[:[]].each do |argsblock, target|
 						begin
-							# maybe the change in this cell triggers new dependencies due to a branch on its
-							# value; so we call calculate again to update dependencies
 							target.calculate(*argsblock[0], &argsblock[1])
 						rescue WeakRef::RefError
-							# see @cells_observers case above
 						end
 					end
 				rescue NoMethodError, TypeError
 				end
 			end
-
+	
 			#define getter
-			define_method(name.to_sym) do
+			define_method(:[]) do |*args|
 				# needed by Object#calculate to figure out which cells a formula
 				# depends on
 				if $cells_read_protocoll
-					$cells_read_protocoll.push [self, name.to_sym]
+					$cells_read_protocoll.push([self, :[]])
 				end
-				instance_variable_get(iname)
-			end
-		end
-	end
-
-	# Make slicing operators behave as if each index denoted a cell
-	def cell_slicing
-		alias_method :cells_slice_assign, :[]=
-		alias_method :cells_slice, :[]
-		private :cells_slice_assign, :cells_slice
-
-		define_method(:[]=) do |*args|
-			index = args[0..-2]
-			old_value = cells_slice(*index)
-			cells_slice_assign(*args)
-			new_value = cells_slice(*index)
-
-			# avoid notifying observers of non-updates
-			if old_value == new_value
-				return
-			end
-
-			begin
-				@cells_observers[:[]].select!{|pattern, block| block.weakref_alive?}
-				@cells_observers[:[]].each do |pattern, block|
-					if pattern === new_value
-						begin
-							block.call(new_value, old_value, self, index)
-						rescue WeakRef::RefError
-						end
-					end
-				end
-			rescue NoMethodError, TypeError
-			end
-
-			begin
-				@cells_internal_observers[:[]].select!{ |argsblock, target| target.weakref_alive? }
-				@cells_internal_observers[:[]].each do |argsblock, target|
-					begin
-						target.calculate(*argsblock[0], &argsblock[1])
-					rescue WeakRef::RefError
-					end
-				end
-			rescue NoMethodError, TypeError
+				cells_slice(*args)
 			end
 		end
 
-		#define getter
-		define_method(:[]) do |*args|
-			# needed by Object#calculate to figure out which cells a formula
-			# depends on
-			if $cells_read_protocoll
-				$cells_read_protocoll.push([self, :[]])
-			end
-			cells_slice(*args)
-		end
-	end
-end
+	end # ClassMethods
 
-class Object
 	# Register observer &block to be called when one or more cells changes.
 	# Return block; the caller is supposed to keep a reference to the block as long
 	# as it's supposed to be executed. Simply registering a block as an observer
